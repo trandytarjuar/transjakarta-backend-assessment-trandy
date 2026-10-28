@@ -1,0 +1,9 @@
+.git
+.env
+.cache
+.idea
+.vscode
+*.log
+README.md
+DEMO_GUIDE.md
+postman

@@ -1,0 +1,141 @@
+{
+  "info": {
+    "_postman_id": "f749096d-bffc-4f05-bef4-10a6c4f47f20",
+    "name": "TransJakarta Fleet API",
+    "description": "Collection untuk menguji health check, lokasi terakhir, dan riwayat lokasi kendaraan.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:18080",
+      "type": "string"
+    },
+    {
+      "key": "vehicleId",
+      "value": "TJ-001",
+      "type": "string"
+    },
+    {
+      "key": "startTimestamp",
+      "value": "1767225600",
+      "type": "string"
+    },
+    {
+      "key": "endTimestamp",
+      "value": "1798761599",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/health",
+        "description": "Memastikan REST API aktif dan siap menerima request."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status code is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"Service status is ok\", function () {",
+              "    pm.expect(pm.response.json().status).to.eql(\"ok\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Latest Vehicle Location",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/vehicles/{{vehicleId}}/location",
+        "description": "Mengambil lokasi terbaru kendaraan berdasarkan vehicle ID."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status code is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"Location contract is valid\", function () {",
+              "    const data = pm.response.json().data;",
+              "    pm.expect(data.vehicle_id).to.eql(pm.variables.get(\"vehicleId\"));",
+              "    pm.expect(data.latitude).to.be.a(\"number\");",
+              "    pm.expect(data.longitude).to.be.a(\"number\");",
+              "    pm.expect(data.timestamp).to.be.a(\"number\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Vehicle Location History",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/vehicles/{{vehicleId}}/history?start={{startTimestamp}}&end={{endTimestamp}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "vehicles",
+            "{{vehicleId}}",
+            "history"
+          ],
+          "query": [
+            {
+              "key": "start",
+              "value": "{{startTimestamp}}",
+              "description": "Awal rentang waktu dalam Unix seconds."
+            },
+            {
+              "key": "end",
+              "value": "{{endTimestamp}}",
+              "description": "Akhir rentang waktu dalam Unix seconds."
+            }
+          ]
+        },
+        "description": "Mengambil riwayat lokasi kendaraan dalam rentang Unix timestamp."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status code is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"History contract is valid\", function () {",
+              "    const body = pm.response.json();",
+              "    pm.expect(body.data).to.be.an(\"array\");",
+              "    pm.expect(body.count).to.eql(body.data.length);",
+              "    body.data.forEach(function (location) {",
+              "        pm.expect(location.timestamp).to.be.a(\"number\");",
+              "    });",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

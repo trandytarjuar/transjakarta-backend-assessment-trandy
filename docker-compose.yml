@@ -1,0 +1,104 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        mosquitto_passwd -b -c /tmp/mosquitto.passwd "$$MQTT_USERNAME" "$$MQTT_PASSWORD"
+        chown mosquitto:mosquitto /tmp/mosquitto.passwd
+        exec mosquitto -c /mosquitto/config/mosquitto.conf
+    environment:
+      MQTT_USERNAME: ${MQTT_USERNAME}
+      MQTT_PASSWORD: ${MQTT_PASSWORD}
+    ports:
+      - "${MQTT_PORT}:1883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -h localhost -u \"$$MQTT_USERNAME\" -P \"$$MQTT_PASSWORD\" -t '$$SYS/broker/uptime' -C 1 -W 3 >/dev/null"]
+      interval: 5s
+      timeout: 4s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    ports:
+      - "${RABBITMQ_MANAGEMENT_PORT}:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  api:
+    build:
+      context: .
+      args:
+        TARGET: api
+    environment: &backend-env
+      DATABASE_URL: ${DATABASE_URL}
+      MQTT_BROKER: ${MQTT_BROKER}
+      MQTT_TOPIC: ${MQTT_TOPIC}
+      MQTT_USERNAME: ${MQTT_USERNAME}
+      MQTT_PASSWORD: ${MQTT_PASSWORD}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+      GEOFENCE_LAT: ${GEOFENCE_LAT}
+      GEOFENCE_LON: ${GEOFENCE_LON}
+      GEOFENCE_RADIUS_METERS: ${GEOFENCE_RADIUS_METERS}
+    ports:
+      - "${API_PORT}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mosquitto:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  publisher:
+    build:
+      context: .
+      args:
+        TARGET: publisher
+    environment:
+      <<: *backend-env
+      VEHICLE_ID: ${VEHICLE_ID}
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+      api:
+        condition: service_started
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      args:
+        TARGET: worker
+    environment: *backend-env
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

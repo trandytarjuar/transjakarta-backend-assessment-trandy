@@ -1,4 +1,7 @@
 .env
 .cache/
 .gocache/
+.tools/
+.video-review/
 *.log
+
